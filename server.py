@@ -1,6 +1,8 @@
 import socket
+import time
 import threading
 from random import shuffle
+from collections import Counter
 
 from commands import server_commands, client_commands
 
@@ -45,47 +47,112 @@ class Member:
 
 
 class Player:
-    def __init__(self, member, role):
-        self._member = member
+    def __init__(self, role):
         self._role = role  # Citizen, Cherif, Mafia
-        self._is_alive = True
+        self._alive = True
 
-    @property
-    def member(self):
-        return self._member
+    def died(self):
+        self._alive = False
 
     @property
     def role(self):
         return self._role
 
     @property
-    def is_alive(self):
-        return self._is_alive
+    def alive(self):
+        return self._alive
 
 
 class Game:
     def __init__(self):
         self.players = {}
         self.active = False
+        self.daytime = None
+        self.active_role = None
+        self.voting = []
+        self.killed_last_night = []
 
-    def start(self, room):
+    def prepare(self, room):
         if room.size >= min(len(room.members), 4):
             self.players = self._distribute(room.members)
             self.active = True
+            self.daytime = "day"
+            for m, player in self.players.items():
+                m.send(f"You are {player.role}!")
             return 1
         return 0
+
+    def start(self):
+        if not self.active:
+            return
+        mafias_count = 1 + int((len(self.players) - 4) / 2)
+        cherif_count = 1
+        citizens_count = len(self.players) - mafias_count - 1
+        while mafias_count or citizens_count + cherif_count:
+            self.active_role = "mafia"
+            self.send_game_messages("Mafia is doing its dark deeds")
+            start = time.time()
+            while len(self.voting) != mafias_count or time.time() - start >= 15:
+                pass
+            mafia_killed = None
+            if self.voting:
+                v = Counter(self.voting)
+                mafia_killed = list(v.keys())[0]
+                self.voting = []
+            self.send_game_messages("Mafia finished")
+
+            self.send_game_messages("Cherif woke up to find mafia")
+            self.active_role = "cherif"
+            while len(self.voting) != mafias_count or time.time() - start >= 15:
+                pass
+            cherif_killed = None
+            if self.voting:
+                cherif_killed = self.voting[0]
+                self.voting = []
+            self.send_game_messages("Cherif finished")
+            dead_list = "Tonight we lost:\n"
+            if mafia_killed:
+                if self.players[mafia_killed].alive:
+                    self.players[mafia_killed].died()
+                    if self.players[mafia_killed].role == "cherif":
+                        cherif_count -= 1
+                    elif self.players[mafia_killed].role == "mafia":
+                        mafias_count -= 1
+                    else:
+                        citizens_count -= 1
+                    dead_list += f" - {mafia_killed.nickname}\n"
+            if cherif_killed:
+                if self.players[cherif_killed].alive:
+                    self.players[cherif_killed].died()
+                    if self.players[mafia_killed].role == "cherif":
+                        cherif_count -= 1
+                    elif self.players[mafia_killed].role == "mafia":
+                        mafias_count -= 1
+                    else:
+                        citizens_count -= 1
+                    dead_list += f" - {mafia_killed.nickname}\n"
+            self.send_game_messages(dead_list)
+            self.send_game_messages("It's time to decide!")
+            start = time.time()
+            while len(self.voting) != (mafias_count + citizens_count + cherif_count) or time.time() - start >= 60:
+                pass
+
+
+    def send_game_messages(self, message):
+        for m in self.players:
+            m.send(message)
 
     def _distribute(self, room_members):
         distribution = []
         mafias_count = 1 + int((len(room_members) - 4) / 2)
         for i in range(mafias_count):
-            distribution.append("Mafia")
-        distribution.append("Cherif")
+            distribution.append("mafia")
+        distribution.append("cherif")
         citizens_count = len(room_members) - mafias_count - 1
         for i in range(citizens_count):
-            distribution.append("Citizen")
+            distribution.append("citizen")
         shuffle(distribution)
-        return [Player(room_members[i], distribution[i]) for i in range(len(distribution))]
+        return {room_members[i]: Player(distribution[i]) for i in range(len(distribution))}
 
 
 class Room:
@@ -116,8 +183,8 @@ class Room:
             return 1
         return 0
 
-    def start_game(self):
-        return self._game.start(self)
+    def prepare_game(self):
+        return self._game.prepare(self)
 
     def is_admin(self, member):
         return self._admin == member
@@ -164,8 +231,10 @@ class Server:
         return rooms_txt
 
     def serialize_members(self, room):
-        # TODO
-        pass
+        members_text = "room_members:\n"
+        for member in room.members:
+            members_text += f" - {member.nickname} {member.address}\n"
+        return members_text
 
     def accept_connections(self):
         while True:
@@ -200,23 +269,32 @@ class Server:
                 room.remove_member(member)
                 member.disconnect()
 
+        elif message.startswith(client_commands.ROOMS):
+            if not member.room_id:
+                member.send(self.serialize_rooms())
+
         elif message.startswith(client_commands.CONNECT):
             room_to_connect = int(message.split(" ")[1])
             room = self.rooms.get(room_to_connect, None)
             if room:
-                if len(room.members) + 1 <= room.size:
-                    room.add_member(member)
-                    member.set_room(room_to_connect)
-                    member.send("You joined the room")
-                    self.broadcast(f"{member.nickname} joined!", member)
+                if not room.game.active:
+                    if len(room.members) + 1 <= room.size:
+                        room.add_member(member)
+                        member.set_room(room_to_connect)
+                        member.send("You joined the room")
+                        self.broadcast(f"{member.nickname} joined!", member)
+                    else:
+                        member.send("Can't connect, room is full")
                 else:
-                    member.send("Can't connect, room is full")
+                    member.send("Game has already started")
             else:
                 member.send("Room doesn't exist or room_id is not valid")
 
         elif message.startswith(client_commands.MEMBERS):
             if member.room_id:
-                member.send(self.serialize_members(self.rooms[member.room_id]))
+                room = self.rooms[member.room_id]
+                if room.game.active:
+                    member.send(self.serialize_members(room.members))
             else:
                 member.send("You are not in room")
 
@@ -224,24 +302,28 @@ class Server:
             if member.room_id:
                 size = int(message.split(" ")[1])
                 room = self.rooms[member.room_id]
-                if room.is_admin(member):
-                    ret = room.set_size(size)
-                    if ret:
-                        member.send(f"Room size was changed to {size}")
+                if not room.game.active:
+                    if room.is_admin(member):
+                        ret = room.set_size(size)
+                        if ret:
+                            member.send(f"Room size was changed to {size}")
+                        else:
+                            member.send("Size is not valid")
                     else:
-                        member.send("Size is not valid")
-                else:
-                    member.send("You don't have enough permissions")
+                        member.send("You don't have enough permissions")
             else:
                 member.send("You are not in room")
 
         elif message.startswith(client_commands.START_GAME):
             if member.room_id:
                 room = self.rooms[member.room_id]
-                if room.is_admin(member):
-                    ret = room.start_game()
-                    if not ret:
-                        member.send("")
+                if not room.game.active:
+                    if room.is_admin(member):
+                        ret = room.start_game()
+                        if ret:
+                            self.broadcast("Insidious mafia started up in the city. You must find out who it is!", )
+                        else:
+                            member.send("Something went wrong")
                 else:
                     member.send("You don't have enough permissions")
             else:
@@ -256,11 +338,16 @@ class Server:
             self.handle_text(member, message)
 
     def broadcast(self, message, self_m=None):
-        if self_m.room_id:
+        if self_m and self_m.room_id:
             room = self.rooms[self_m.room_id]
-            for member in room.members:
-                if member != self_m:
-                    member.send(message)
+            if room.game.active and room.game.daytime == "night" and room.game.players[self_m] == "mafia":
+                for member in room.members:
+                    if member != self_m and room.game.players[member].role == "mafia":
+                        member.send(message)
+            else:
+                for member in room.members:
+                    if member != self_m:
+                        member.send(message)
 
 
 server = Server(HOST, PORT)
