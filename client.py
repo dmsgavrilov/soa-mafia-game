@@ -13,7 +13,6 @@ class Client:
         self.sock.connect((host, port))
 
         self.closed = False
-        self.room_id = None
 
         threading.Thread(target=self.receive).start()
         threading.Thread(target=self.write).start()
@@ -25,11 +24,13 @@ class Client:
                 message = data.decode("utf-8")
                 if message == server_commands.NICKNAME:
                     self.sock.send(self.nickname.encode("utf-8"))
+                if message == server_commands.LEAVE:
+                    break
                 else:
                     print(message)
             except:
-                time.sleep(0.5)
                 self.leave()
+                break
 
     def send(self, message):
         self.sock.send(message.encode("utf-8"))
@@ -41,23 +42,23 @@ class Client:
                 if msg_text:
                     self.send(msg_text)
                     if msg_text == client_commands.LEAVE:
-                        time.sleep(0.5)
                         self.leave()
-
+                        break
             except:
                 self.leave()
+                break
 
     def leave(self):
         self.closed = True
+        time.sleep(0.5)
         self.sock.close()
 
 
 # host = input("Enter IP-address of the server:\n")
 # port = int(input("Enter port of the server:\n"))
-# nickname = input("Enter your nickname:\n")
+nickname = input("Enter your nickname:\n")
 
 host = "127.0.0.1"
 port = 5000
-nickname = "dima"
 
 client = Client(host, port, nickname)

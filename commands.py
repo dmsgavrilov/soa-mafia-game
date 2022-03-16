@@ -1,5 +1,6 @@
 class ServerCommands:
     NICKNAME = "NICK"
+    LEAVE = "LEAVE"
 
 
 class ClientCommands:
@@ -12,7 +13,10 @@ class ClientCommands:
     ROOMS = "/rooms"
     VERIFY = "/verify"  # For cherif
     KILL = "/kill"  # For cherif and mafia
+    EXECUTE = "/execute"  # For citizen
+    SKIP = "/skip"  # For citizen
     PLAYERS = "/players"
+    SELF = "/me"
 
 
 server_commands = ServerCommands()
