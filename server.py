@@ -319,7 +319,8 @@ class Server:
 
             m.send("You can create room or connect to one that exists. Use commands:\n"
                    "/create_room {title} - to create room\n"
-                   "/connect {room_id} - to connect to room\n")
+                   "/connect {room_id} - to connect to room\n"
+                   "print /help to see all commands")
             m.send(self.serialize_rooms())
 
             threading.Thread(target=self.handle, args=(m,)).start()
@@ -335,6 +336,27 @@ class Server:
         elif message.startswith(client_commands.LEAVE):
             member.send("LEAVE")
             return 1
+
+        elif message.startswith(client_commands.HELP):
+            msg_text = "LIST OF COMMANDS:\n" \
+                       "   /leave - to leave server\n" \
+                       "   /members - list of room members\n" \
+                       "   /create_room {title} - creates the room\n" \
+                       "   /connect {room_id} - connects to the room\n" \
+                       "   /set_size {size} - set size for room (for room admin)\n" \
+                       "   /start_game - start game (for room admin)\n" \
+                       "   /rooms - list of rooms\n" \
+                       "   /players - list of players (only during game)\n" \
+                       "   /me - shows your character (only during game)\n" \
+                       "   /kill - kill players " \
+                       "(only during game, available for cherif and mafia during night)\n" \
+                       "   /verify {player_id} - shows role of the player " \
+                       "(only during game, available for cherif during night)\n" \
+                       "   /execute {player_id} - votes for executing player " \
+                       "(only during game, available for citizens during day)\n" \
+                       "   /skip - votes for skipping day without executing " \
+                       "(only during game, available for citizens during day)\n"
+            member.send(msg_text)
 
         elif message.startswith(client_commands.ROOMS):
             if not member.room_id:

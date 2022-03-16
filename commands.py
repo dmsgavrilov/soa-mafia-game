@@ -17,6 +17,7 @@ class ClientCommands:
     SKIP = "/skip"  # For citizen
     PLAYERS = "/players"
     SELF = "/me"
+    HELP = "/help"
 
 
 server_commands = ServerCommands()

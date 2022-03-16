@@ -54,11 +54,8 @@ class Client:
         self.sock.close()
 
 
-# host = input("Enter IP-address of the server:\n")
-# port = int(input("Enter port of the server:\n"))
+host = input("Enter IP-address of the server:\n")
+port = int(input("Enter port of the server:\n"))
 nickname = input("Enter your nickname:\n")
-
-host = "127.0.0.1"
-port = 5000
 
 client = Client(host, port, nickname)
