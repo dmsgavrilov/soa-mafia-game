@@ -1,0 +1,28 @@
+syntax = "proto3";
+
+package grpc;
+
+message Empty {}
+
+// I called it Note because message Message sounds complicated
+message Note {
+    optional int32 member_id = 1;
+    optional string name = 2;
+    string message = 3;
+    repeated int32 to = 4;
+}
+
+message Connection {
+    string nickname = 1;
+}
+
+message ConnectionReply {
+    int32 member_id = 1;
+}
+
+service ChatServer {
+    // This bi-directional stream makes it possible to send and receive Notes between 2 persons
+    rpc ChatStream (Empty) returns (stream Note);
+    rpc SendNote (Note) returns (Empty);
+    rpc Connect (Connection) returns (ConnectionReply);
+}

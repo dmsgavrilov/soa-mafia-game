@@ -1,61 +1,52 @@
-import socket
-import time
 import threading
+from tkinter import *
+from tkinter import simpledialog
 
-from commands import client_commands, server_commands
+import grpc
+
+import proto.chat_pb2 as chat
+import proto.chat_pb2_grpc as rpc
+
+from commands import server_commands, client_commands
+
+HOST = 'localhost'
+PORT = 5000
 
 
 class Client:
-    def __init__(self, host, port, nickname):
+
+    def __init__(self, nickname: str):
         self.nickname = nickname
+        channel = grpc.insecure_channel(HOST + ':' + str(PORT))
+        self.conn = rpc.ChatServerStub(channel)
+        self.id = self.conn.Connect(chat.Connection(nickname=nickname)).member_id
+        threading.Thread(target=self.listen_for_messages, daemon=True).start()
+        self.write()
 
-        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.sock.connect((host, port))
+    def message_handler(self, note):
+        if self.id == note.member_id or (note.to and self.id not in note.to):
+            return
+        if note.name:
+            print(f"{note.name}: {note.message}")
+        else:
+            print(f"{note.message}")
 
-        self.closed = False
-
-        threading.Thread(target=self.receive).start()
-        threading.Thread(target=self.write).start()
-
-    def receive(self):
-        while not self.closed:
-            try:
-                data = self.sock.recv(1024)
-                message = data.decode("utf-8")
-                if message == server_commands.NICKNAME:
-                    self.sock.send(self.nickname.encode("utf-8"))
-                if message == server_commands.LEAVE:
-                    break
-                else:
-                    print(message)
-            except:
-                self.leave()
-                break
-
-    def send(self, message):
-        self.sock.send(message.encode("utf-8"))
+    def listen_for_messages(self):
+        for note in self.conn.ChatStream(chat.Empty()):
+            self.message_handler(note)
 
     def write(self):
-        while not self.closed:
-            try:
-                msg_text = input()
-                if msg_text:
-                    self.send(msg_text)
-                    if msg_text == client_commands.LEAVE:
-                        self.leave()
-                        break
-            except:
-                self.leave()
-                break
-
-    def leave(self):
-        self.closed = True
-        time.sleep(0.5)
-        self.sock.close()
+        while True:
+            message = input()
+            if message:
+                n = chat.Note(
+                    name=self.nickname, member_id=self.id, message=message
+                )
+                self.conn.SendNote(n)
+                if message == client_commands.LEAVE:
+                    break
 
 
-host = input("Enter IP-address of the server:\n")
-port = int(input("Enter port of the server:\n"))
-nickname = input("Enter your nickname:\n")
-
-client = Client(host, port, nickname)
+if __name__ == '__main__':
+    nickname = input("Enter your nickname:\n")
+    c = Client(nickname)

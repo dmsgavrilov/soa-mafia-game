@@ -1,8 +1,3 @@
-class ServerCommands:
-    NICKNAME = "NICK"
-    LEAVE = "LEAVE"
-
-
 class ClientCommands:
     LEAVE = "/leave"
     MEMBERS = "/members"
@@ -20,5 +15,4 @@ class ClientCommands:
     HELP = "/help"
 
 
-server_commands = ServerCommands()
 client_commands = ClientCommands()
