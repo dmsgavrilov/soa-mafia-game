@@ -1,6 +1,5 @@
 import threading
-from tkinter import *
-from tkinter import simpledialog
+
 
 import grpc
 
