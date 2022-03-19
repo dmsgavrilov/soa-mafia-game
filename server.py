@@ -318,7 +318,10 @@ class ChatServer(rpc.ChatServerServicer):
 if __name__ == '__main__':
     port = 5000
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
-    server_size = max(4, int(input("Enter server size (min is 4):\n")))
+    try:
+        server_size = max(4, int(input("Enter server size (min is 4):\n")))
+    except:
+        server_size = 4
     rpc.add_ChatServerServicer_to_server(ChatServer(server_size), server)
     print('Starting server. Listening...')
     server.add_insecure_port('[::]:' + str(port))
