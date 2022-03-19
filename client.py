@@ -7,7 +7,7 @@ import grpc
 import proto.chat_pb2 as chat
 import proto.chat_pb2_grpc as rpc
 
-from commands import server_commands, client_commands
+from commands import client_commands
 
 HOST = 'localhost'
 PORT = 5000
